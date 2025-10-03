@@ -1,0 +1,45 @@
+services:
+  libreoffice-converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: excel-csv-aas
+    ports:
+      - "8500:8080"
+    volumes:
+      - ./output:/app/output
+      - ./index.php:/app/index.php
+    environment:
+      - MAX_EXECUTION_TIME=300
+      - PHP_MEMORY_LIMIT=512M
+      - PHP_ERROR_REPORTING=E_ALL
+      - TZ=UTC
+    restart: unless-stopped
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"excelData\":\"UEsDBBQAAAAIAA==\"}"]
+      interval: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    #user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+      - /app/tmp:noexec,nosuid,size=100m
+
+networks:
+  default:
+    name: libreoffice-network
