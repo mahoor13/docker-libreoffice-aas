@@ -2,15 +2,15 @@
 
 This is a minimal Excel to CSV conversion service built using:
 
-- [FrankenPHP](https://github.com/dunglas/frankenphp)
-- [LibreOffice](https://www.libreoffice.org/)
-- PHP (no frameworks or dependencies)
+- [Python 3](https://www.python.org/) with [UNO](https://www.libreoffice.org/get-help/documentation/) bindings
+- [LibreOffice](https://www.libreoffice.org/) running in headless mode
+- [Supervisor](http://supervisord.org/) for process management
 
 It accepts JSON-based POST requests to convert Excel files (xlsx, xls, xlsm) to CSV format.
 
 ## 📦 Docker Setup
 
-This project is packaged in a lightweight Docker container built on top of [`linuxserver/libreoffice:25.2.5`](https://hub.docker.com/r/linuxserver/libreoffice).
+This project is packaged in a lightweight Docker container built on top of [`linuxserver/libreoffice:25.2.5`](https://hub.docker.com/r/linuxserver/libreoffice) with supervisor managing both LibreOffice and the Python server processes.
 
 ### Build the Docker image
 
@@ -45,69 +45,61 @@ application/json
 
 ```json
 {
-  "excelData": "base64_encoded_excel_content",
-  "excel": "/path/to/excel/file.xlsx", // optional alternative to excelData
-  "params": {
-    "format": "xlsx" // xlsx, xls, or xlsm
-  },
-  "output": "converted_file.csv", // optional: save to output directory
-  "debug": true // optional: creates doc.sh with the command used
+  "type": "xlsx",
+  "content": "base64_encoded_excel_content"
 }
 ```
 
-- **`excelData`** – (optional) Base64 encoded Excel file content.
-- **`excel`** – (optional) File path to Excel file on server (alternative to excelData).
-- **`params`** – Conversion options:
-  - `format`: Excel file format (`xlsx`, `xls`, or `xlsm`)
-- **`output`** – (optional) Filename to save in output directory.
-- **`debug`** – (optional) Creates a `doc.sh` file with the LibreOffice command used.
+- **`type`** – Excel file format (`xlsx`, `xls`, or `xlsm`)
+- **`content`** – Base64 encoded Excel file content
 
-**Note:** Either `excelData` or `excel` must be provided, but not both.
-
-### Example: Convert Excel to CSV from base64 data
+### Example: Convert Excel to CSV
 
 ```bash
 curl -X POST http://localhost:8080 \
   -H "Content-Type: application/json" \
-  -d '{
-    "excelData": "UEsDBBQAAAAIAA==",
-    "params": {
-      "format": "xlsx"
-    },
-    "output": "converted_file.csv"
-  }' --output output.csv
-```
-
-### Example: Convert Excel file from server path
-
-```bash
-curl -X POST http://localhost:8080 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "excel": "/app/sample.xlsx",
-    "output": "converted_file.csv"
-  }' --output output.csv
+  -d "{
+    \"type\": \"xlsx\",
+    \"content\": \"$(cat ./input.xlsx|base64 -w0)\"
+  }" --output output.csv
 ```
 
 ## 📄 Output
 
 - Returns a CSV file directly in the response body.
-- Response headers sample:
+- Response headers:
   ```
   Content-Type: text/csv
-  Content-Disposition: inline; filename="output.csv"
+  Content-Length: <file_size>
   ```
 
-## 🛠 Notes
+## 🛠 Architecture
 
-- Only one of `excelData` or `excel` should be provided.
-- FrankenPHP runs PHP as a fast, async worker – perfect for containerized services.
-- Supports Excel formats: xlsx, xls, xlsm
-- LibreOffice runs in headless mode for server conversion
+- **Supervisor** manages both LibreOffice and Python server processes
+- **LibreOffice** runs in headless mode with socket connection on port 2002
+- **Python server** connects to LibreOffice via UNO bindings and serves HTTP requests on port 8080
+- **Automatic restart** - if either process crashes, supervisor restarts it
+- **Separate logging** - each process has its own log files for debugging
 
-## 🤔 Why FrankenPHP Instead of Python?
+## 🔧 Process Management
 
-This service is built with **FrankenPHP** instead of a Python-based stack to take advantage of its **lightweight, high-concurrency architecture**. FrankenPHP runs as a blazing-fast, production-grade PHP server with native support for async workers and HTTP/1.1/2.0. Unlike typical Python solutions (e.g. Flask + Gunicorn), FrankenPHP offers **built-in concurrency without needing additional layers or process managers**, resulting in faster response times and lower overhead. Thanks to its minimal runtime and efficient memory footprint, the final Docker image is **significantly smaller** than equivalent Python-based containers, making it ideal for microservices, cold starts, and edge deployments.
+The service uses supervisor to manage two processes:
+
+1. **LibreOffice process**: `libreoffice --accept="socket,host=localhost,port=2002;urp;" --headless`
+2. **Python server**: `python3 server.py`
+
+Both processes:
+
+- Start automatically when the container starts
+- Restart automatically if they crash
+- Have separate log files in `/var/log/supervisor/`
+- Run with proper priority (LibreOffice starts first)
+
+## 📊 Logs
+
+- LibreOffice logs: `/var/log/supervisor/libreoffice.out.log` and `/var/log/supervisor/libreoffice.err.log`
+- Python server logs: `/var/log/supervisor/python-server.out.log` and `/var/log/supervisor/python-server.err.log`
+- Supervisor logs: `/var/log/supervisor/supervisord.log`
 
 ## 📬 License
 
