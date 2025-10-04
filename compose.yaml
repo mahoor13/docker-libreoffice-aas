@@ -1,11 +1,11 @@
 services:
-  libreoffice-converter:
+  converter:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: libreoffice-converter
     ports:
-      - "8080:8080"
+      - "8500:8080"
     restart: unless-stopped
     deploy:
       resources:
