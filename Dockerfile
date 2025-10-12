@@ -9,13 +9,11 @@ COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN chmod +x /app/server.py
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
         supervisor \
-        libreoffice-script-provider-python \
-        python3-uno \
-        curl && \
-    rm -rf /var/lib/apt/lists/*
+        python3 \
+        libreoffice-sdk \
+        curl
 
 # Create supervisor log directory
 RUN mkdir -p /var/log/supervisor

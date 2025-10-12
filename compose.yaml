@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: libreoffice-converter
+    restart: unless-stopped
     ports:
       - "8500:8080"
-    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -15,9 +15,6 @@ services:
         reservations:
           memory: 256M
           cpus: "0.25"
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
     networks:
       - net
 
