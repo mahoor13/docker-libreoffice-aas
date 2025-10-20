@@ -27,6 +27,30 @@ docker run -p 8080:8080 excel-csv-aas
 Once running, the service will be available at:
 **`http://localhost:8080`**
 
+### Configure the listen port
+
+The server port is configurable with the following precedence:
+
+1. CLI flag: `-p/--port`
+2. Environment variable: `LISTEN_PORT`
+3. Default: `8080`
+
+Examples:
+
+- Run locally on a custom port:
+
+  ```bash
+  python3 server.py --port 9000
+  ```
+
+- Run in Docker on port 9000 (container and host):
+
+  ```bash
+  docker run -e LISTEN_PORT=9000 -p 9000:9000 excel-csv-aas
+  ```
+
+- With docker-compose, the included `compose.yaml` maps host `8500` to container `8080` by default.
+
 ## 📥 API Usage
 
 ### Endpoints
@@ -77,7 +101,7 @@ curl -X POST http://localhost:8080 \
 
 - **Supervisor** manages both LibreOffice and Python server processes
 - **LibreOffice** runs in headless mode with socket connection on port 2002
-- **Python server** connects to LibreOffice via UNO bindings and serves HTTP requests on port 8080
+- **Python server** connects to LibreOffice via UNO bindings and serves HTTP requests on a configurable port (default `8080`)
 - **Automatic restart** - if either process crashes, supervisor restarts it
 - **Separate logging** - each process has its own log files for debugging
 

@@ -5,6 +5,7 @@ import base64
 import os
 import random
 import string
+import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
@@ -54,6 +55,52 @@ def convert_to_csv(input_path: str, output_path: str):
     document.close(True)
 
 class ExcelToCSVHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path != "/":
+                self.send_error(404, "Not Found")
+                return
+
+            libreoffice_ok = False
+            err_msg = None
+            try:
+                # Try connecting to LibreOffice UNO socket
+                local_ctx = uno.getComponentContext()
+                resolver = local_ctx.ServiceManager.createInstanceWithContext(
+                    "com.sun.star.bridge.UnoUrlResolver", local_ctx
+                )
+                ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+                # Create a desktop instance to ensure the context is usable
+                ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+                libreoffice_ok = True
+            except Exception as e:
+                err_msg = str(e)
+
+            body = {
+                "status": "ok" if libreoffice_ok else "unavailable",
+                "libreoffice": {
+                    "connected": libreoffice_ok,
+                    "error": None if libreoffice_ok else err_msg,
+                },
+                "usage": {
+                    "endpoint": "POST /",
+                    "content_type": "application/json",
+                    "body": {"type": "xlsx", "content": "<base64>"},
+                    "returns": "text/csv",
+                },
+            }
+
+            payload = json.dumps(body).encode("utf-8")
+            self.send_response(200 if libreoffice_ok else 503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        except Exception as e:
+            self.send_error(500, f"Internal server error: {str(e)}")
+
     def do_POST(self):
         try:
             # Read request body
@@ -113,9 +160,39 @@ class ExcelToCSVHandler(BaseHTTPRequestHandler):
         """Log requests to stdout."""
         sys.stdout.write(f"{self.address_string()} - [{self.log_date_time_string()}] {format % args}\n")
 
+def get_server_port(argv=None):
+    """Get port from CLI (-p/--port), else env LISTEN_PORT, else 8080.
+
+    Also enables -h/--help to show usage.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    parser = argparse.ArgumentParser(
+        description="Excel to CSV HTTP server. Converts uploaded Excel (xlsx/xls/xlsm) to CSV.",
+        add_help=True,
+    )
+    parser.add_argument(
+        '-p', '--port', type=int,
+        help='Port to listen on (default: env LISTEN_PORT or 8080)'
+    )
+    args = parser.parse_args(argv)
+
+    if getattr(args, 'port', None) is not None:
+        return int(args.port)
+
+    env_port = os.getenv('LISTEN_PORT')
+    if env_port:
+        try:
+            return int(env_port)
+        except ValueError:
+            pass
+
+    return 8080
+
 def main():
     host = '0.0.0.0'
-    port = 8080
+    port = get_server_port()
 
     server = HTTPServer((host, port), ExcelToCSVHandler)
     print(f"🚀 Excel to CSV service running on http://{host}:{port}")
